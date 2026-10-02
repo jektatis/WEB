@@ -6,6 +6,7 @@ on:
     paths:
       - 'Portfolio_Jessica_GitHub_Seguro_Actualizado.zip'
       - '.github/workflows/deploy.yml'
+      - 'site/content.js'
   workflow_dispatch:
 
 permissions:
@@ -65,6 +66,11 @@ jobs:
                   salida = destino / relativo
                   salida.parent.mkdir(parents=True, exist_ok=True)
                   salida.write_bytes(contenido)
+          # La trayectoria y las competencias se mantienen en GitHub independientemente del ZIP.
+          contenido_actualizado = pathlib.Path("site/content.js")
+          if contenido_actualizado.is_file():
+              (destino / "content.js").write_bytes(contenido_actualizado.read_bytes())
+              print("Contenido profesional actualizado aplicado desde site/content.js")
           print("12 archivos publicos comprobados; no se publican vistas previas ni documentacion interna.")
           PY
 
