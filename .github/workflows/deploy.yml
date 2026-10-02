@@ -1,0 +1,91 @@
+name: Publicar portfolio Jessica en GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Portfolio_Jessica_GitHub_Seguro_Actualizado.zip'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: portfolio-pages
+  cancel-in-progress: true
+
+jobs:
+  preparar:
+    runs-on: ubuntu-latest
+    outputs:
+      preparado: ${{ steps.detectar.outputs.preparado }}
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Comprobar que el ZIP esta cargado
+        id: detectar
+        shell: bash
+        run: |
+          if test -f Portfolio_Jessica_GitHub_Seguro_Actualizado.zip; then
+            echo "preparado=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "preparado=false" >> "$GITHUB_OUTPUT"
+            echo "Sube Portfolio_Jessica_GitHub_Seguro_Actualizado.zip a la raiz del repositorio para publicar."
+          fi
+
+      - name: Validar el ZIP y extraer solo los archivos publicos del sitio
+        if: steps.detectar.outputs.preparado == 'true'
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import pathlib
+          import zipfile
+
+          archivo = pathlib.Path("Portfolio_Jessica_GitHub_Seguro_Actualizado.zip")
+          esperado = "01aceba02be5dcd064daec67f5150a8dc97ea0fe3692308d8cea43b77cce63df"
+          real = hashlib.sha256(archivo.read_bytes()).hexdigest()
+          if real != esperado:
+              raise SystemExit("ZIP diferente de la version revisada. No se publica: comprueba el archivo.")
+          archivos = [
+              ".nojekyll", "index.html", "profil.html", "expertises.html",
+              "styles.css", "script.js", "content.js", "favicon.svg",
+              "assets/hero-abstract.webp", "assets/hero-glass.webp",
+              "assets/hero-office.webp", "assets/portrait-original.webp",
+          ]
+          destino = pathlib.Path("_site")
+          with zipfile.ZipFile(archivo) as zipf:
+              for relativo in archivos:
+                  ruta = "site/" + relativo
+                  contenido = zipf.read(ruta)
+                  salida = destino / relativo
+                  salida.parent.mkdir(parents=True, exist_ok=True)
+                  salida.write_bytes(contenido)
+          print("12 archivos publicos comprobados; no se publican vistas previas ni documentacion interna.")
+          PY
+
+      - name: Configurar GitHub Pages
+        if: steps.detectar.outputs.preparado == 'true'
+        uses: actions/configure-pages@v5
+
+      - name: Preparar artefacto publico
+        if: steps.detectar.outputs.preparado == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  publicar:
+    if: needs.preparar.outputs.preparado == 'true'
+    needs: preparar
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Publicar pagina
+        id: deploy
+        uses: actions/deploy-pages@v4
